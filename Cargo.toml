@@ -1,0 +1,12 @@
+[package]
+name = "sway-action"
+version = "0.1.0"
+authors = ["Rouven Czerwinski <rouven@czerwinskis.de>"]
+edition = "2018"
+
+[dependencies]
+clap = "2"
+
+[dependencies.i3ipc]
+path = "../i3ipc-rs"
+features = ["sway-1-1"]
