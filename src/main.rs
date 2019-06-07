@@ -88,8 +88,7 @@ fn get_workspaces(conn: &mut I3Connection) -> Vec<String> {
 
 fn get_containers(conn: &mut I3Connection) -> Vec<String> {
     let nodes = conn.get_tree().expect("Could not get tree");
-    let containers = get_all_by_type(&nodes, &NodeType::Con);
-    containers
+    get_all_by_type(&nodes, &NodeType::Con)
 }
 
 fn get_all_by_type(node: &Node, node_type: &NodeType) -> Vec<String> {
@@ -116,13 +115,12 @@ fn rofi_get_selection(input: &Vec<String>) -> String {
 }
 
 fn rofi_run(input: &Vec<String>) -> String {
-    let mut selection = Command::new("/usr/bin/rofi");
-    let mut child = selection.arg("-dmenu")
-             .arg("-i")
-             .stdin(Stdio::piped())
-             .stdout(Stdio::piped())
-             .spawn()
-             .expect("Can't open rofi");
+    let mut child = Command::new("/usr/bin/rofi").arg("-dmenu")
+                                                 .arg("-i")
+                                                 .stdin(Stdio::piped())
+                                                 .stdout(Stdio::piped())
+                                                 .spawn()
+                                                 .expect("Can't open rofi");
     {
         let stdin = child.stdin.as_mut().expect("failed to get stdin");
             stdin.write_all(input.join("\n").as_bytes()).expect("failed to write to rofi");
