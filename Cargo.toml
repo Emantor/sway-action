@@ -6,6 +6,9 @@ edition = "2018"
 
 [dependencies]
 clap = "2"
+yaml-rust = "0.4"
+failure = "0.1.5"
+shellexpand = "1.0.0"
 
 [dependencies.i3ipc]
 path = "../i3ipc-rs"
