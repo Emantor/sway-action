@@ -184,7 +184,7 @@ fn rofi_get_selection(input: &Vec<String>) -> String {
 }
 
 fn rofi_run(input: &Vec<String>) -> String {
-    let mut child = Command::new("/usr/bin/rofi").arg("-dmenu")
+    let mut child = Command::new("rofi").arg("-dmenu")
 						 .arg("-i")
 						 .stdin(Stdio::piped())
 						 .stdout(Stdio::piped())
