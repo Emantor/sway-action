@@ -1,6 +1,6 @@
 [package]
 name = "sway-action"
-version = "0.1.0"
+version = "0.1.4"
 authors = ["Rouven Czerwinski <rouven@czerwinskis.de>"]
 edition = "2018"
 
@@ -11,5 +11,5 @@ failure = "0.1.5"
 shellexpand = "1.0.0"
 
 [dependencies.i3ipc]
-path = "../i3ipc-rs"
+path = "i3ipc-rs"
 features = ["sway-1-1"]
