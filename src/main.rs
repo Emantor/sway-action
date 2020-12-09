@@ -271,7 +271,7 @@ fn get_active_workspace(conn: &mut I3Connection) -> Result<String, Error> {
         .collect())
 }
 
-fn change_dir_from_mapping(config: &Path, mut conn: &mut I3Connection) -> Result<bool, Error> {
+fn change_dir_from_mapping(config: &Path, mut conn: &mut I3Connection) -> Result<(), Error> {
     let workspace = get_active_workspace(&mut conn)?;
     let map = std::fs::read_to_string(config)?.lines()
                                               .map(|s| s.split(": "))
@@ -285,8 +285,14 @@ fn change_dir_from_mapping(config: &Path, mut conn: &mut I3Connection) -> Result
         None => tilde("~").to_string(),
     };
 
+    let path = Path::new(&dir);
+
+    if !path.exists() {
+        return Ok(())
+    }
+
     match set_current_dir(dir) {
-        Ok(_) => Ok(true),
+        Ok(_) => Ok(()),
         Err(_) => Err(WorkspaceExecError::DirSetupError)?
     }
 }
