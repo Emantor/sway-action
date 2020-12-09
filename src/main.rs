@@ -9,17 +9,12 @@ extern crate clap;
 use clap::{App, AppSettings, Arg, ArgMatches, SubCommand};
 
 use std::env::set_current_dir;
-use std::fs::File;
-use std::io::prelude::*;
 use std::path::Path;
 
 #[macro_use]
 extern crate failure;
 use failure::err_msg;
 use failure::Error;
-
-extern crate yaml_rust;
-use yaml_rust::{Yaml, YamlLoader};
 
 extern crate shellexpand;
 use shellexpand::tilde;
@@ -28,6 +23,8 @@ use shellexpand::tilde;
 enum WorkspaceExecError {
     #[fail(display = "No arguments supplied: {}", name)]
     NoArgumentError { name: String },
+    #[fail(display = "Failed setting current workdir")]
+    DirSetupError,
 }
 
 fn main() {
@@ -116,7 +113,7 @@ fn workspace_exec(mut conn: &mut I3Connection, matches: &ArgMatches) -> Result<(
     let matches = matches.subcommand_matches("workspace-exec").unwrap();
     let config = matches
         .value_of("config")
-        .unwrap_or("~/.config/sway-action/mapping.yaml");
+        .unwrap_or("~/.config/sway-action/mapping");
     let config = tilde(config).to_string();
     let config_path = Path::new(&config);
     change_dir_from_mapping(&config_path, &mut conn)?;
@@ -264,14 +261,6 @@ fn search_tree_for_mark(node: &Node, search_mark: &str) -> bool {
     result
 }
 
-fn open_parse_config(path: &Path) -> Result<std::vec::Vec<Yaml>, Error> {
-    let mut file = File::open(path)?;
-    let mut contents = String::new();
-    file.read_to_string(&mut contents)?;
-    let yaml = YamlLoader::load_from_str(&contents)?;
-    Ok(yaml)
-}
-
 fn get_active_workspace(conn: &mut I3Connection) -> Result<String, Error> {
     let workspaces = conn.get_workspaces()?;
     Ok(workspaces
@@ -284,21 +273,20 @@ fn get_active_workspace(conn: &mut I3Connection) -> Result<String, Error> {
 
 fn change_dir_from_mapping(config: &Path, mut conn: &mut I3Connection) -> Result<bool, Error> {
     let workspace = get_active_workspace(&mut conn)?;
-    let mapping = open_parse_config(&config);
-    if let Err(e) = mapping {
-        println!("Config Error: {}", err_msg(e));
-        return Ok(false);
-    }
-    let mapping = mapping.unwrap();
-    let dir = match mapping[0]["mapping"][&workspace[..]].clone().into_string() {
+    let map = std::fs::read_to_string(config)?.lines()
+                                              .map(|s| s.split(": "))
+                                              .fold(std::collections::HashMap::new(), |mut acc, x| {
+        acc.insert(x.clone().next().unwrap().to_string(), x.clone().skip(1).next().unwrap().to_string());
+        acc
+    });
+
+    let dir = match map.get(&workspace[..]) {
         Some(s) => tilde(&s).to_string(),
         None => tilde("~").to_string(),
     };
+
     match set_current_dir(dir) {
         Ok(_) => Ok(true),
-        Err(e) => {
-            println!("Could not set dir: {}", err_msg(e));
-            std::process::exit(1);
-        }
+        Err(_) => Err(WorkspaceExecError::DirSetupError)?
     }
 }
