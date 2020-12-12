@@ -116,7 +116,13 @@ fn workspace_exec(mut conn: &mut I3Connection, matches: &ArgMatches) -> Result<(
         .unwrap_or("~/.config/sway-action/mapping");
     let config = tilde(config).to_string();
     let config_path = Path::new(&config);
-    change_dir_from_mapping(&config_path, &mut conn)?;
+    match change_dir_from_mapping(&config_path, &mut conn) {
+        Err(e) => {
+            println!("Error: {}", e);
+            println!("Continuing without changing directory");
+        },
+        Ok(_) => (),
+    };
     let args = matches
         .values_of("args")
         .ok_or(WorkspaceExecError::NoArgumentError {
