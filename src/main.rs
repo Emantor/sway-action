@@ -29,7 +29,7 @@ enum WorkspaceExecError {
 
 fn main() {
     let matches = App::new("sway-action")
-        .version("v0.1.6")
+        .version("v0.1.7")
         .author("Rouven Czerwinski <rouven@czerwinskis.de>")
         .about("Provides selections of sway $things via rofi")
         .setting(AppSettings::ArgRequiredElseHelp)
