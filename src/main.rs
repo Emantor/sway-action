@@ -31,17 +31,17 @@ fn main() {
     let matches = App::new("sway-action")
         .version("v0.1.7")
         .author("Rouven Czerwinski <rouven@czerwinskis.de>")
-        .about("Provides selections of sway $things via wofi")
+        .about("Provides selections of sway $things via rofi")
         .setting(AppSettings::ArgRequiredElseHelp)
         .setting(AppSettings::TrailingVarArg)
         .subcommand(
-            SubCommand::with_name("focus-container").about("Focus window by name using wofi"),
+            SubCommand::with_name("focus-container").about("Focus window by name using rofi"),
         )
         .subcommand(
             SubCommand::with_name("steal-container").about("Steal window into current workspace"),
         )
         .subcommand(
-            SubCommand::with_name("focus-workspace").about("Focus workspace by name using wofi"),
+            SubCommand::with_name("focus-workspace").about("Focus workspace by name using rofi"),
         )
         .subcommand(
             SubCommand::with_name("move-to-workspace")
@@ -141,7 +141,7 @@ fn workspace_exec(mut conn: &mut I3Connection, matches: &ArgMatches) -> Result<(
 fn focus_container_by_id(mut conn: &mut I3Connection) {
     let containers = get_containers(&mut conn);
 
-    let id = wofi_get_selection_id(&containers);
+    let id = rofi_get_selection_id(&containers);
     conn.run_command(&format!("[con_id={}] focus", id))
         .expect("Can't change focus");
 }
@@ -149,7 +149,7 @@ fn focus_container_by_id(mut conn: &mut I3Connection) {
 fn steal_container_by_id(mut conn: &mut I3Connection) {
     let windows = get_containers(&mut conn);
 
-    let id = wofi_get_selection_id(&windows);
+    let id = rofi_get_selection_id(&windows);
     conn.run_command(&format!("[con_id={}] move to workspace current", id))
         .expect(&format!("Can't focus window {}", id));
 }
@@ -157,7 +157,7 @@ fn steal_container_by_id(mut conn: &mut I3Connection) {
 fn focus_workspace_by_name(mut conn: &mut I3Connection) {
     let work_names = get_workspaces(&mut conn);
 
-    let space = wofi_get_selection(&work_names);
+    let space = rofi_get_selection(&work_names);
     conn.run_command(&format!("workspace {}", space))
         .expect(&format!("Can't focus workspace {}", space));
 }
@@ -165,14 +165,14 @@ fn focus_workspace_by_name(mut conn: &mut I3Connection) {
 fn move_to_workspace_by_name(mut conn: &mut I3Connection) {
     let work_names = get_workspaces(&mut conn);
 
-    let space = wofi_get_selection(&work_names);
+    let space = rofi_get_selection(&work_names);
     conn.run_command(&format!("move window to workspace {}", space))
         .expect(&format!("Can't focus workspace {}", space));
 }
 
 fn move_workspace_to_output(mut conn: &mut I3Connection) {
     let outputs = get_outputs(&mut conn);
-    let output = wofi_get_selection_id(&outputs);
+    let output = rofi_get_selection_id(&outputs);
     conn.run_command(&format!("move workspace to output {}", output))
         .expect(&format!("Can't send to output {}", output));
 }
@@ -215,29 +215,33 @@ fn get_all_by_type(node: &Node, node_type: &NodeType) -> Vec<String> {
     res
 }
 
-fn wofi_get_selection_id(input: &Vec<String>) -> String {
-    let wofi_out = wofi_run(&input);
-    wofi_out
+fn rofi_get_selection_id(input: &Vec<String>) -> String {
+    let rofi_out = rofi_run(&input);
+    rofi_out
         .split(":")
         .next()
         .expect("Can't split out id")
         .to_string()
 }
 
-fn wofi_get_selection(input: &Vec<String>) -> String {
-    wofi_run(&input)
+fn rofi_get_selection(input: &Vec<String>) -> String {
+    rofi_run(&input)
 }
 
-fn wofi_run(input: &Vec<String>) -> String {
-    let mut child = Command::new("wofi")
+fn rofi_run(input: &Vec<String>) -> String {
+    let mut child = Command::new("rofi")
         .arg("-dmenu")
         .arg("-i")
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .spawn()
-        .expect("Can't open wofi");
-    let stdin = child.stdin.as_mut().expect("failed to get stdin");
-    stdin.write_all(input.join("\n").as_bytes()).expect("failed to write to wofi");
+        .expect("Can't open rofi");
+    {
+        let stdin = child.stdin.as_mut().expect("failed to get stdin");
+        stdin
+            .write_all(input.join("\n").as_bytes())
+            .expect("failed to write to rofi");
+    }
     let output = child.wait_with_output().expect("failed to wait on child");
     String::from_utf8(output.stdout).expect("Can't read output")
 }
