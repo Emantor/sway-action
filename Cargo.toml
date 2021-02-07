@@ -1,6 +1,6 @@
 [package]
 name = "sway-action"
-version = "0.1.8"
+version = "0.1.9"
 authors = ["Rouven Czerwinski <rouven@czerwinskis.de>"]
 edition = "2018"
 
