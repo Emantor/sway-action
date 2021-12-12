@@ -2,6 +2,7 @@ extern crate i3ipc;
 use i3ipc::reply::Node;
 use i3ipc::reply::NodeType;
 use i3ipc::I3Connection;
+use std::collections::HashMap;
 use std::io::Write;
 use std::process::{Command, Stdio};
 
@@ -279,12 +280,16 @@ fn get_active_workspace(conn: &mut I3Connection) -> Result<String, Error> {
 
 fn change_dir_from_mapping(config: &Path, mut conn: &mut I3Connection) -> Result<(), Error> {
     let workspace = get_active_workspace(&mut conn)?;
-    let map = std::fs::read_to_string(config)?.lines()
-                                              .map(|s| s.split(": "))
-                                              .fold(std::collections::HashMap::new(), |mut acc, x| {
-        acc.insert(x.clone().next().unwrap().to_string(), x.clone().skip(1).next().unwrap().to_string());
-        acc
-    });
+    let map = std::fs::read_to_string(config)?
+        .lines()
+        .map(|s| s.split(": "))
+        .fold(HashMap::new(), |mut acc, x| {
+            acc.insert(
+                x.clone().next().unwrap().to_string(),
+                x.clone().skip(1).next().unwrap().to_string(),
+            );
+            acc
+        });
 
     let dir = match map.get(&workspace[..]) {
         Some(s) => tilde(&s).to_string(),
