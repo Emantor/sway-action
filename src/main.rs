@@ -26,6 +26,13 @@ enum WorkspaceExecError {
     NoArgumentError { name: String },
     #[fail(display = "Failed setting current workdir")]
     DirSetupError,
+    #[fail(display = "Configuration wrong")]
+    ConfigError,
+}
+
+struct ApplicationState<'a> {
+    conn: &'a mut I3Connection,
+    confdir: &'a Path,
 }
 
 fn main() {
@@ -35,6 +42,7 @@ fn main() {
         .about("Provides selections of sway $things via rofi")
         .setting(AppSettings::ArgRequiredElseHelp)
         .setting(AppSettings::TrailingVarArg)
+        .arg(Arg::with_name("confdir").default_value("~/.config/sway-action/"))
         .subcommand(
             SubCommand::with_name("focus-container").about("Focus window by name using rofi"),
         )
@@ -52,7 +60,11 @@ fn main() {
             SubCommand::with_name("move-workspace-to-output")
                 .about("Move current workspace to output by name"),
         )
-        .subcommand(SubCommand::with_name("quick-window").about("Show quick-window"))
+        .subcommand(
+            SubCommand::with_name("quick-window")
+                .about("Show quick-window")
+                .arg(Arg::with_name("window")),
+        )
         .subcommand(
             SubCommand::with_name("workspace-exec")
                 .about("execute command in workspace")
@@ -62,16 +74,20 @@ fn main() {
 
     // establish a connection to i3 over a unix socket
     let err = || -> Result<(), Error> {
-        let mut connection = I3Connection::connect()?;
+        let config = tilde(matches.value_of("confdir").unwrap()).to_string();
+        let mut state = ApplicationState {
+            conn: &mut I3Connection::connect().unwrap(),
+            confdir: &Path::new(&config),
+        };
 
         match matches.subcommand_name() {
-            Some("focus-container") => Ok(focus_container_by_id(&mut connection)),
-            Some("steal-container") => Ok(steal_container_by_id(&mut connection)),
-            Some("focus-workspace") => Ok(focus_workspace_by_name(&mut connection)),
-            Some("move-to-workspace") => Ok(move_to_workspace_by_name(&mut connection)),
-            Some("move-workspace-to-output") => Ok(move_workspace_to_output(&mut connection)),
-            Some("workspace-exec") => workspace_exec(&mut connection, &matches),
-            Some("quick-window") => quick_window(&mut connection),
+            Some("focus-container") => Ok(focus_container_by_id(&mut state)),
+            Some("steal-container") => Ok(steal_container_by_id(&mut state)),
+            Some("focus-workspace") => Ok(focus_workspace_by_name(&mut state)),
+            Some("move-to-workspace") => Ok(move_to_workspace_by_name(&mut state)),
+            Some("move-workspace-to-output") => Ok(move_workspace_to_output(&mut state)),
+            Some("workspace-exec") => workspace_exec(&mut state, &matches),
+            Some("quick-window") => quick_window(&mut state, &matches),
             _ => Ok({}),
         }
     }();
@@ -83,25 +99,38 @@ fn main() {
     // request and print the i3 version
 }
 
-fn quick_window(conn: &mut I3Connection) -> Result<(), Error> {
-    let nodes = conn.get_tree().expect("Could not get tree");
-    match search_tree_for_mark(&nodes, "quick") {
+fn quick_window(state: &mut ApplicationState, matches: &ArgMatches) -> Result<(), Error> {
+    let matches = matches.subcommand_matches("quick-window").unwrap();
+    let nodes = state.conn.get_tree().expect("Could not get tree");
+    let quick_path = state.confdir.join("quickmap");
+    let window = matches.value_of("window").unwrap_or("quick");
+    let map = std::fs::read_to_string(quick_path)?
+        .lines()
+        .map(|s| s.split(": "))
+        .fold(HashMap::new(), |mut acc, x| {
+            acc.insert(
+                x.clone().next().unwrap().to_string(),
+                x.clone().skip(1).next().unwrap().to_string(),
+            );
+            acc
+        });
+
+    let commands = map
+        .get(&window[..])
+        .ok_or(WorkspaceExecError::ConfigError)?
+        .split(' ')
+        .collect::<Vec<&str>>();
+
+    match search_tree_for_mark(&nodes, window) {
         false => {
-            Command::new("alacritty")
-                .arg("--class")
-                .arg("quick_scratchpad")
-                .arg("-e")
-                .arg("tmux")
-                .arg("new-session")
-                .arg("-A")
-                .arg("-s")
-                .arg("quick")
+            Command::new(commands[0])
+                .args(&commands[1..])
                 .spawn()
                 .expect("Could not start tmux");
         }
         true => {
             Command::new("swaymsg")
-                .arg("[con_mark=\"quick\"]")
+                .arg(format!("[con_mark=\"{}\"]", window))
                 .arg("scratchpad")
                 .arg("show")
                 .spawn()
@@ -110,18 +139,14 @@ fn quick_window(conn: &mut I3Connection) -> Result<(), Error> {
     }
     Ok(())
 }
-fn workspace_exec(mut conn: &mut I3Connection, matches: &ArgMatches) -> Result<(), Error> {
+fn workspace_exec(state: &mut ApplicationState, matches: &ArgMatches) -> Result<(), Error> {
     let matches = matches.subcommand_matches("workspace-exec").unwrap();
-    let config = matches
-        .value_of("config")
-        .unwrap_or("~/.config/sway-action/mapping");
-    let config = tilde(config).to_string();
-    let config_path = Path::new(&config);
-    match change_dir_from_mapping(&config_path, &mut conn) {
+    let mapping_path = state.confdir.join("mapping");
+    match change_dir_from_mapping(&mapping_path, &mut state.conn) {
         Err(e) => {
             println!("Error: {}", e);
             println!("Continuing without changing directory");
-        },
+        }
         Ok(_) => (),
     };
     let args = matches
@@ -139,42 +164,52 @@ fn workspace_exec(mut conn: &mut I3Connection, matches: &ArgMatches) -> Result<(
     Ok(())
 }
 
-fn focus_container_by_id(mut conn: &mut I3Connection) {
-    let containers = get_containers(&mut conn);
+fn focus_container_by_id(state: &mut ApplicationState) {
+    let containers = get_containers(&mut state.conn);
 
     let id = rofi_get_selection_id(&containers);
-    conn.run_command(&format!("[con_id={}] focus", id))
+    state
+        .conn
+        .run_command(&format!("[con_id={}] focus", id))
         .expect("Can't change focus");
 }
 
-fn steal_container_by_id(mut conn: &mut I3Connection) {
-    let windows = get_containers(&mut conn);
+fn steal_container_by_id(state: &mut ApplicationState) {
+    let windows = get_containers(&mut state.conn);
 
     let id = rofi_get_selection_id(&windows);
-    conn.run_command(&format!("[con_id={}] move to workspace current", id))
+    state
+        .conn
+        .run_command(&format!("[con_id={}] move to workspace current", id))
         .expect(&format!("Can't focus window {}", id));
 }
 
-fn focus_workspace_by_name(mut conn: &mut I3Connection) {
-    let work_names = get_workspaces(&mut conn);
+fn focus_workspace_by_name(state: &mut ApplicationState) {
+    let work_names = get_workspaces(&mut state.conn);
 
     let space = rofi_get_selection(&work_names);
-    conn.run_command(&format!("workspace {}", space))
+    state
+        .conn
+        .run_command(&format!("workspace {}", space))
         .expect(&format!("Can't focus workspace {}", space));
 }
 
-fn move_to_workspace_by_name(mut conn: &mut I3Connection) {
-    let work_names = get_workspaces(&mut conn);
+fn move_to_workspace_by_name(state: &mut ApplicationState) {
+    let work_names = get_workspaces(&mut state.conn);
 
     let space = rofi_get_selection(&work_names);
-    conn.run_command(&format!("move window to workspace {}", space))
+    state
+        .conn
+        .run_command(&format!("move window to workspace {}", space))
         .expect(&format!("Can't focus workspace {}", space));
 }
 
-fn move_workspace_to_output(mut conn: &mut I3Connection) {
-    let outputs = get_outputs(&mut conn);
+fn move_workspace_to_output(state: &mut ApplicationState) {
+    let outputs = get_outputs(&mut state.conn);
     let output = rofi_get_selection_id(&outputs);
-    conn.run_command(&format!("move workspace to output {}", output))
+    state
+        .conn
+        .run_command(&format!("move workspace to output {}", output))
         .expect(&format!("Can't send to output {}", output));
 }
 
@@ -299,11 +334,11 @@ fn change_dir_from_mapping(config: &Path, mut conn: &mut I3Connection) -> Result
     let path = Path::new(&dir);
 
     if !path.exists() {
-        return Ok(())
+        return Ok(());
     }
 
     match set_current_dir(dir) {
         Ok(_) => Ok(()),
-        Err(_) => Err(WorkspaceExecError::DirSetupError)?
+        Err(_) => Err(WorkspaceExecError::DirSetupError)?,
     }
 }
