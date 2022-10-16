@@ -35,7 +35,7 @@ struct ApplicationState<'a> {
     confdir: &'a Path,
 }
 
-fn main() {
+fn main() -> Result<(), Error> {
     let matches = App::new("sway-action")
         .version("v0.1.7")
         .author("Rouven Czerwinski <rouven@czerwinskis.de>")
@@ -73,30 +73,22 @@ fn main() {
         .get_matches();
 
     // establish a connection to i3 over a unix socket
-    let err = || -> Result<(), Error> {
         let config = tilde(matches.value_of("confdir").unwrap()).to_string();
         let mut state = ApplicationState {
             conn: &mut I3Connection::connect().unwrap(),
             confdir: &Path::new(&config),
         };
 
-        match matches.subcommand_name() {
-            Some("focus-container") => Ok(focus_container_by_id(&mut state)),
-            Some("steal-container") => Ok(steal_container_by_id(&mut state)),
-            Some("focus-workspace") => Ok(focus_workspace_by_name(&mut state)),
-            Some("move-to-workspace") => Ok(move_to_workspace_by_name(&mut state)),
-            Some("move-workspace-to-output") => Ok(move_workspace_to_output(&mut state)),
-            Some("workspace-exec") => workspace_exec(&mut state, &matches),
-            Some("quick-window") => quick_window(&mut state, &matches),
-            _ => Ok({}),
-        }
-    }();
-
-    if let Err(e) = err {
-        println!("{}", err_msg(e));
-        std::process::exit(1);
+    match matches.subcommand_name() {
+        Some("focus-container") => Ok(focus_container_by_id(&mut state))?,
+        Some("steal-container") => Ok(steal_container_by_id(&mut state))?,
+        Some("focus-workspace") => Ok(focus_workspace_by_name(&mut state))?,
+        Some("move-to-workspace") => Ok(move_to_workspace_by_name(&mut state))?,
+        Some("move-workspace-to-output") => Ok(move_workspace_to_output(&mut state))?,
+        Some("workspace-exec") => workspace_exec(&mut state, &matches)?,
+        Some("quick-window") => quick_window(&mut state, &matches)?,
+        _ => Ok({}),
     }
-    // request and print the i3 version
 }
 
 fn quick_window(state: &mut ApplicationState, matches: &ArgMatches) -> Result<(), Error> {
