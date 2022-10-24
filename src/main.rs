@@ -39,18 +39,18 @@ fn main() -> Result<(), Error> {
     let matches = App::new("sway-action")
         .version("v0.1.7")
         .author("Rouven Czerwinski <rouven@czerwinskis.de>")
-        .about("Provides selections of sway $things via rofi")
+        .about("Provides selections of sway $things via bemenu")
         .setting(AppSettings::ArgRequiredElseHelp)
         .setting(AppSettings::TrailingVarArg)
         .arg(Arg::with_name("confdir").default_value("~/.config/sway-action/"))
         .subcommand(
-            SubCommand::with_name("focus-container").about("Focus window by name using rofi"),
+            SubCommand::with_name("focus-container").about("Focus window by name using bemenu"),
         )
         .subcommand(
             SubCommand::with_name("steal-container").about("Steal window into current workspace"),
         )
         .subcommand(
-            SubCommand::with_name("focus-workspace").about("Focus workspace by name using rofi"),
+            SubCommand::with_name("focus-workspace").about("Focus workspace by name using bemenu"),
         )
         .subcommand(
             SubCommand::with_name("move-to-workspace")
@@ -80,13 +80,13 @@ fn main() -> Result<(), Error> {
         };
 
     match matches.subcommand_name() {
-        Some("focus-container") => Ok(focus_container_by_id(&mut state))?,
-        Some("steal-container") => Ok(steal_container_by_id(&mut state))?,
-        Some("focus-workspace") => Ok(focus_workspace_by_name(&mut state))?,
-        Some("move-to-workspace") => Ok(move_to_workspace_by_name(&mut state))?,
-        Some("move-workspace-to-output") => Ok(move_workspace_to_output(&mut state))?,
-        Some("workspace-exec") => workspace_exec(&mut state, &matches)?,
-        Some("quick-window") => quick_window(&mut state, &matches)?,
+        Some("focus-container") => Ok(focus_container_by_id(&mut state)),
+        Some("steal-container") => Ok(steal_container_by_id(&mut state)),
+        Some("focus-workspace") => Ok(focus_workspace_by_name(&mut state)),
+        Some("move-to-workspace") => Ok(move_to_workspace_by_name(&mut state)),
+        Some("move-workspace-to-output") => Ok(move_workspace_to_output(&mut state)),
+        Some("workspace-exec") => workspace_exec(&mut state, &matches),
+        Some("quick-window") => quick_window(&mut state, &matches),
         _ => Ok({}),
     }
 }
@@ -159,7 +159,7 @@ fn workspace_exec(state: &mut ApplicationState, matches: &ArgMatches) -> Result<
 fn focus_container_by_id(state: &mut ApplicationState) {
     let containers = get_containers(&mut state.conn);
 
-    let id = rofi_get_selection_id(&containers);
+    let id = bemenu_get_selection_id(&containers);
     state
         .conn
         .run_command(&format!("[con_id={}] focus", id))
@@ -169,7 +169,7 @@ fn focus_container_by_id(state: &mut ApplicationState) {
 fn steal_container_by_id(state: &mut ApplicationState) {
     let windows = get_containers(&mut state.conn);
 
-    let id = rofi_get_selection_id(&windows);
+    let id = bemenu_get_selection_id(&windows);
     state
         .conn
         .run_command(&format!("[con_id={}] move to workspace current", id))
@@ -179,7 +179,7 @@ fn steal_container_by_id(state: &mut ApplicationState) {
 fn focus_workspace_by_name(state: &mut ApplicationState) {
     let work_names = get_workspaces(&mut state.conn);
 
-    let space = rofi_get_selection(&work_names);
+    let space = bemenu_get_selection(&work_names);
     state
         .conn
         .run_command(&format!("workspace {}", space))
@@ -189,7 +189,7 @@ fn focus_workspace_by_name(state: &mut ApplicationState) {
 fn move_to_workspace_by_name(state: &mut ApplicationState) {
     let work_names = get_workspaces(&mut state.conn);
 
-    let space = rofi_get_selection(&work_names);
+    let space = bemenu_get_selection(&work_names);
     state
         .conn
         .run_command(&format!("move window to workspace {}", space))
@@ -198,7 +198,7 @@ fn move_to_workspace_by_name(state: &mut ApplicationState) {
 
 fn move_workspace_to_output(state: &mut ApplicationState) {
     let outputs = get_outputs(&mut state.conn);
-    let output = rofi_get_selection_id(&outputs);
+    let output = bemenu_get_selection_id(&outputs);
     state
         .conn
         .run_command(&format!("move workspace to output {}", output))
@@ -243,32 +243,33 @@ fn get_all_by_type(node: &Node, node_type: &NodeType) -> Vec<String> {
     res
 }
 
-fn rofi_get_selection_id(input: &Vec<String>) -> String {
-    let rofi_out = rofi_run(&input);
-    rofi_out
+fn bemenu_get_selection_id(input: &Vec<String>) -> String {
+    let bemenu_out = bemenu_run(&input);
+    bemenu_out
         .split(":")
         .next()
         .expect("Can't split out id")
         .to_string()
 }
 
-fn rofi_get_selection(input: &Vec<String>) -> String {
-    rofi_run(&input)
+fn bemenu_get_selection(input: &Vec<String>) -> String {
+    bemenu_run(&input)
 }
 
-fn rofi_run(input: &Vec<String>) -> String {
-    let mut child = Command::new("rofi")
-        .arg("-dmenu")
-        .arg("-i")
+fn bemenu_run(input: &Vec<String>) -> String {
+    let mut child = Command::new("bemenu")
+        .arg("--fn")
+        .arg("Monospace 16")
+        .arg("--accept-single")
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .spawn()
-        .expect("Can't open rofi");
+        .expect("Can't open bemenu");
     {
         let stdin = child.stdin.as_mut().expect("failed to get stdin");
         stdin
             .write_all(input.join("\n").as_bytes())
-            .expect("failed to write to rofi");
+            .expect("failed to write to bemenu");
     }
     let output = child.wait_with_output().expect("failed to wait on child");
     String::from_utf8(output.stdout).expect("Can't read output")
