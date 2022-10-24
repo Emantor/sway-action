@@ -260,7 +260,6 @@ fn bemenu_run(input: &Vec<String>) -> String {
     let mut child = Command::new("bemenu")
         .arg("--fn")
         .arg("Monospace 16")
-        .arg("--accept-single")
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .spawn()
