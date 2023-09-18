@@ -124,7 +124,8 @@ fn quick_window(state: &mut ApplicationState, matches: &ArgMatches) -> Result<()
                 .arg(format!("[con_mark=\"{}\"]", window))
                 .arg("scratchpad")
                 .arg("show")
-                .spawn()
+                .stdout(Stdio::piped())
+                .output()
                 .expect("Could not run swaymsg");
         }
     }
