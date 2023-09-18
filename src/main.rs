@@ -14,7 +14,6 @@ use std::path::Path;
 
 #[macro_use]
 extern crate failure;
-use failure::err_msg;
 use failure::Error;
 
 extern crate shellexpand;
